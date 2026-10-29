@@ -14,6 +14,10 @@ on:
         description: "Stop after this many pages (0 = no limit; try 50 for a trial run)"
         required: false
         default: "0"
+      reuse_pages:
+        description: "Re-read the pages saved by the last run instead of downloading them again"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -36,14 +40,33 @@ jobs:
       - name: Test the scraper
         run: python -m unittest discover -s tests -v
 
+      # Downloaded pages are saved after every run. They are only read back
+      # when reuse_pages is ticked; otherwise every page is fetched fresh.
+      - name: Restore saved pages
+        if: inputs.reuse_pages
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/title8
+          key: title8-pages-${{ github.run_id }}
+          restore-keys: title8-pages-
+
       - name: Scrape
         env:
           SECTIONS: ${{ inputs.sections }}
           MAX_PAGES: ${{ inputs.max_pages }}
+          REUSE: ${{ inputs.reuse_pages }}
         run: |
           args=(--out data --max-pages "${MAX_PAGES:-0}")
           if [ -n "$SECTIONS" ]; then args+=(--section $SECTIONS); fi
+          if [ "$REUSE" != "true" ]; then args+=(--refresh); fi
           python title8_scraper.py "${args[@]}"
+
+      - name: Save downloaded pages
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/title8
+          key: title8-pages-${{ github.run_id }}
 
       - name: Attach data to this run
         if: always()

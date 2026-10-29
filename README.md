@@ -43,9 +43,13 @@ Each record looks like this:
 
 1. Open the repository on GitHub and click the **Actions** tab.
 2. Click **Scrape Title 8** in the list on the left.
-3. Click **Run workflow**. The two boxes are optional:
+3. Click **Run workflow**. The options are all optional:
    - *Only these section numbers*: e.g. `3203 5144 1509`. Leave it blank for all of Title 8.
    - *Stop after this many pages*: put `50` for a quick trial run first.
+   - *Re-read the pages saved by the last run*: tick this to rebuild the
+     data from the last run's downloaded pages in a minute or two, without
+     contacting the DIR site. Useful after a fix to the scraper. Leave it
+     unticked to fetch the current regulations.
 4. Click the green **Run workflow** button.
 
 A full run fetches several thousand pages at one per second, so expect it
