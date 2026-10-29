@@ -20,6 +20,7 @@ Output (in --out, default ./data):
 """
 
 import argparse
+import collections
 import html
 import json
 import re
@@ -34,10 +35,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 BASE = "https://www.dir.ca.gov/title8/"
-DEFAULT_SEEDS = [
-    "https://www.dir.ca.gov/samples/search/query.htm",
-    BASE,
-]
+DEFAULT_SEEDS = ["https://www.dir.ca.gov/samples/search/query.htm"]
 USER_AGENT = (
     "Title8Scraper/1.0 (+https://github.com/kalium2/title8; "
     "regulatory reference lookup; polite crawl)"
@@ -270,17 +268,19 @@ def in_scope(url):
     ):
         return False
     path = p.path.lower()
-    return path.startswith("/title8/") and (path.endswith((".html", ".htm")) or path == "/title8/")
+    return path.startswith("/title8/") and path.endswith((".html", ".htm"))
 
 
 def normalise(url, base):
-    """Absolute URL without fragment; DIR hosts folded to one form. Offsite URLs kept as-is."""
+    """Absolute URL without fragment, DIR host and /title8/ folded to one form
+    (the site links both /Title8/ and /title8/). Offsite URLs kept as-is."""
     url = urllib.parse.urljoin(base, url.strip())
     url, _ = urllib.parse.urldefrag(url)
     p = urllib.parse.urlparse(url)
     if p.netloc.lower() not in ("www.dir.ca.gov", "dir.ca.gov"):
         return url
-    return urllib.parse.urlunparse(("https", "www.dir.ca.gov", p.path, "", p.query, ""))
+    path = re.sub(r"^/title8/", "/title8/", p.path, flags=re.I)
+    return urllib.parse.urlunparse(("https", "www.dir.ca.gov", path, "", p.query, ""))
 
 
 def crawl(args):
@@ -288,20 +288,29 @@ def crawl(args):
     records, failures = {}, []
     started = time.monotonic()
 
+    # Section pages are fetched before further index pages, so a short
+    # --max-pages trial still returns sections rather than only tables of contents.
+    sections_q, index_q = collections.deque(), collections.deque()
+
+    def enqueue(url):
+        (sections_q if section_from_url(url) else index_q).append(url)
+
     if args.section:
-        queue = [BASE + f"{s}.html" for s in args.section]
+        start = [BASE + f"{s}.html" for s in args.section]
         follow = False
     else:
-        queue = list(args.seed or DEFAULT_SEEDS)
+        start = list(args.seed or DEFAULT_SEEDS)
         follow = True
-    seen = set(queue)
+    for url in start:
+        enqueue(url)
+    seen = set(start)
     fetched = 0
 
-    while queue:
+    while sections_q or index_q:
         if args.max_pages and fetched >= args.max_pages:
             print(f"Stopped at --max-pages {args.max_pages}", file=sys.stderr)
             break
-        url = queue.pop(0)
+        url = (sections_q or index_q).popleft()
         try:
             raw = fetcher.get(url)
         except Exception as e:
@@ -314,7 +323,8 @@ def crawl(args):
         if rec:
             records[rec["section"]] = rec
         if fetched % 25 == 0 or args.verbose:
-            print(f"[{fetched} pages, {len(records)} sections, {len(queue)} queued] {url}",
+            queued = len(sections_q) + len(index_q)
+            print(f"[{fetched} pages, {len(records)} sections, {queued} queued] {url}",
                   file=sys.stderr)
 
         if follow:
@@ -324,7 +334,7 @@ def crawl(args):
                 nxt = normalise(href, url)
                 if nxt not in seen and in_scope(nxt):
                     seen.add(nxt)
-                    queue.append(nxt)
+                    enqueue(nxt)
 
     return records, failures, {
         "pages_fetched": fetched,

@@ -113,5 +113,27 @@ class CrawlTests(unittest.TestCase):
             self.assertEqual(Path(d, "title8_sections.json").read_text(), before)
 
 
+class OrderTests(unittest.TestCase):
+    def test_sections_before_more_index_pages_and_case_folded(self):
+        index = """<a href="/Title8/sub7.html">a</a><a href="/title8/sub8.html">b</a>
+        <a href="/title8/sub7.html">dup</a><a href="/Title8/3203.html">s</a>"""
+        pages = {"https://www.dir.ca.gov/samples/search/query.htm": index,
+                 "https://www.dir.ca.gov/title8/3203.html": SECTION_PAGE,
+                 "https://www.dir.ca.gov/title8/sub7.html": "",
+                 "https://www.dir.ca.gov/title8/sub8.html": ""}
+        order = []
+
+        def fake_get(_self, url):
+            order.append(url)
+            return pages[url]
+
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(t8.Fetcher, "__init__", lambda s, *a: setattr(s, "network_calls", 0)), \
+                mock.patch.object(t8.Fetcher, "get", fake_get):
+            self.assertEqual(t8.main(["--out", d, "--max-pages", "2"]), 0)
+        self.assertEqual(order, ["https://www.dir.ca.gov/samples/search/query.htm",
+                                 "https://www.dir.ca.gov/title8/3203.html"])
+
+
 if __name__ == "__main__":
     unittest.main()
