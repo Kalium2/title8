@@ -102,7 +102,7 @@ class PageParser(HTMLParser):
     def text_lines(self):
         out = []
         for line in self.lines:
-            line = re.sub(r"[ \t\r\f\v\xa0]+", " ", line).strip()
+            line = re.sub(r"[\s\xa0]+", " ", line).strip()
             if line:
                 out.append(line)
         return out
@@ -142,12 +142,15 @@ def extract_section(url, raw_html):
         t = re.sub(r"\s+", " ", html.unescape(page.title)).strip()
         m = re.search(r"Section\s*" + re.escape(section) + r"\.?\s*(.*)$", t, re.I)
         heading = m.group(1).strip() if m else ""
-        heading_idx = -1
+        # No heading in the page body: the text starts after the last hierarchy
+        # line, which also leaves the site banner and disclaimer behind.
+        heading_idx = max((i for i, line in enumerate(lines) if HIERARCHY_RE.match(line)),
+                          default=-1)
 
     # Hierarchy lines (Chapter 4. ..., Subchapter 7. ..., Article 1. ...) sit
     # above the heading.
     hierarchy = []
-    for line in lines[: max(heading_idx, 0)]:
+    for line in lines[: heading_idx + 1]:
         m = HIERARCHY_RE.match(line)
         if m:
             hierarchy.append({
@@ -156,7 +159,7 @@ def extract_section(url, raw_html):
                 "name": m.group(3).strip().rstrip("."),
             })
 
-    body = lines[heading_idx + 1:] if heading_idx >= 0 else lines
+    body = lines[heading_idx + 1:]
     # Trim site navigation that trails the regulation text.
     for i, line in enumerate(body):
         if re.match(r"^(Go Back to|Back to top|Return to)\b", line, re.I):
@@ -164,11 +167,14 @@ def extract_section(url, raw_html):
             break
 
     # Split off the authority note and history, which DIR prints after the text.
+    # Only "Note: Authority/Reference cited" is the authority note; other notes
+    # ("Note: The construction of ...") are part of the regulation text.
     note, history = "", []
     text_lines = body
     for i, line in enumerate(body):
-        if re.match(r"^Note:\s", line):
-            note = line[len("Note:"):].strip()
+        m = re.match(r"^NOTE:\s*((?:Authority|Reference)\b.*)$", line, re.I)
+        if m:
+            note = m.group(1).strip()
             text_lines = body[:i]
             rest = body[i + 1:]
             if rest and re.match(r"^HISTORY\b", rest[0], re.I):
@@ -200,6 +206,17 @@ def section_sort_key(section):
     return [(0, int(p)) if p.isdigit() else (1, p) for p in parts]
 
 
+def decode(body, charset=None):
+    """DIR serves UTF-8 without always saying so; older pages are Windows-1252."""
+    for enc in ("utf-8", charset):
+        if enc:
+            try:
+                return body.decode(enc)
+            except (UnicodeDecodeError, LookupError):
+                pass
+    return body.decode("windows-1252", errors="replace")
+
+
 class Fetcher:
     """Polite HTTP: robots.txt, a delay between requests, retries, a disk cache."""
 
@@ -227,7 +244,7 @@ class Fetcher:
     def get(self, url):
         cached = self._cache_path(url)
         if cached.exists() and not self.refresh:
-            return cached.read_text(encoding="utf-8")
+            return decode(cached.read_bytes())
         if self.robots and not self.robots.can_fetch(USER_AGENT, url):
             raise PermissionError(f"robots.txt disallows {url}")
 
@@ -242,10 +259,9 @@ class Fetcher:
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     body = resp.read()
-                    charset = resp.headers.get_content_charset() or "windows-1252"
-                text = body.decode(charset, errors="replace")
-                cached.write_text(text, encoding="utf-8")
-                return text
+                    charset = resp.headers.get_content_charset()
+                cached.write_bytes(body)
+                return decode(body, charset)
             except urllib.error.HTTPError as e:
                 if e.code == 404 or attempt == self.retries:
                     raise
@@ -360,6 +376,7 @@ def write_output(out_dir, records, failures, stats, merge=False):
         "scraped_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": BASE,
         "sections": len(ordered),
+        "sections_without_text": [r["section"] for r in ordered if not r.get("text")],
         **stats,
         "failures": failures,
     }

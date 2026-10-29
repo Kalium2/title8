@@ -72,6 +72,37 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(got, ["342", "1532", "1532.1", "3203", "3314", "3314a"])
 
 
+class RealLayoutTests(unittest.TestCase):
+    """Shapes seen in the first real crawl (sections 331, 338, 341)."""
+
+    def test_uppercase_note_and_in_text_note(self):
+        page = """<p>Article 2. Permits</p><p>&sect;341. Permit Requirements.</p>
+        <p>(6) Excavation for swimming pools. Note: The construction of stages does not
+        require a permit.</p>
+        <p>NOTE: Authority cited: Section 6501, Labor Code.</p><p>HISTORY</p><p>1. Filed.</p>"""
+        rec = t8.extract_section("https://www.dir.ca.gov/title8/341.html", page)
+        self.assertIn("Note: The construction of stages does not require a permit.", rec["text"])
+        self.assertEqual(rec["authority_note"], "Authority cited: Section 6501, Labor Code.")
+        self.assertEqual(rec["history"], ["1. Filed."])
+
+    def test_page_without_heading_or_text(self):
+        page = """<html><head><title>California Code of Regulations, Title 8, Section 338.
+        Special Procedures</title></head><body><a href="#c">Skip to Main Content</a>
+        <p>This information is provided free of charge by the Department of Industrial
+        Relations</p><p>Chapter 3.2. California Occupational Safety and Health Regulations</p>
+        <p>Article 5. Hazardous Substances Information and Training</p></body></html>"""
+        rec = t8.extract_section("https://www.dir.ca.gov/title8/338.html", page)
+        self.assertEqual(rec["heading"], "Special Procedures")
+        self.assertEqual(rec["text"], "")
+        self.assertEqual([h["level"] for h in rec["hierarchy"]], ["Chapter", "Article"])
+
+    def test_utf8_without_charset_header(self):
+        body = "<p>(a) \u201cChief\u201d means</p>".encode("utf-8")
+        self.assertIn("\u201cChief\u201d", t8.decode(body, None))
+        self.assertIn("\u201cChief\u201d", t8.decode(body, "windows-1252"))
+        self.assertEqual(t8.decode("caf\xe9".encode("windows-1252")), "caf\xe9")
+
+
 class CrawlTests(unittest.TestCase):
     PAGES = {
         "https://www.dir.ca.gov/samples/search/query.htm": INDEX_PAGE,
