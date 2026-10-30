@@ -105,6 +105,14 @@ class RealLayoutTests(unittest.TestCase):
         self.assertEqual([h["level"] for h in rec["hierarchy"]], ["Article"])
         self.assertEqual(rec["text"], "Part I. OSHA-Accepted Fit Test Protocols")
 
+    def test_appendix_table_run_into_one_paragraph(self):
+        table = "Appendix C -- Spirometry Prediction Tables TABLE 1. " + "60.0 3.44 3.59 " * 40
+        page = f"<p>Article 107. Dusts</p><p>{table}</p>"
+        rec = t8.extract_section("https://www.dir.ca.gov/title8/5190c.html", page)
+        self.assertEqual(rec["heading"], "")
+        self.assertTrue(rec["text"].startswith("Appendix C -- Spirometry"))
+        self.assertEqual([h["level"] for h in rec["hierarchy"]], ["Article"])
+
     def test_page_without_heading_or_text(self):
         page = """<html><head><title>California Code of Regulations, Title 8, Section 338.
         Special Procedures</title></head><body><a href="#c">Skip to Main Content</a>

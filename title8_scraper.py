@@ -53,6 +53,15 @@ HEADING_RE = re.compile(
     r"^(?:§+|Section)\s*(\d+(?:\.\d+)*[a-z]?)\.?\s*(.*)$", re.I
 )
 
+# A hierarchy line is a short title. Some appendix pages run a whole table
+# into the "Appendix C -- ..." paragraph; that is text, not a heading.
+MAX_HIERARCHY_LINE = 300
+
+
+def hierarchy_match(line):
+    return HIERARCHY_RE.match(line) if len(line) <= MAX_HIERARCHY_LINE else None
+
+
 BLOCK_TAGS = {
     "p", "div", "br", "li", "ul", "ol", "tr", "table", "h1", "h2", "h3",
     "h4", "h5", "h6", "pre", "blockquote", "dd", "dt", "hr", "section",
@@ -144,14 +153,14 @@ def extract_section(url, raw_html):
         heading = m.group(1).strip() if m else ""
         # No heading in the page body: the text starts after the last hierarchy
         # line, which also leaves the site banner and disclaimer behind.
-        heading_idx = max((i for i, line in enumerate(lines) if HIERARCHY_RE.match(line)),
+        heading_idx = max((i for i, line in enumerate(lines) if hierarchy_match(line)),
                           default=-1)
 
     # Hierarchy lines (Chapter 4. ..., Subchapter 7. ..., Article 1. ...) sit
     # above the heading.
     hierarchy = []
     for line in lines[: heading_idx + 1]:
-        m = HIERARCHY_RE.match(line)
+        m = hierarchy_match(line)
         if m:
             hierarchy.append({
                 "level": m.group(1).title(),
