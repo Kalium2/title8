@@ -158,6 +158,11 @@ def extract_section(url, raw_html):
                 "number": m.group(2).rstrip("."),
                 "name": m.group(3).strip().rstrip("."),
             })
+    # An appendix page (5144a.html) has no section heading; its own
+    # "Appendix A to Section 5144: ..." line is the heading, not a parent level.
+    if not heading and hierarchy and hierarchy[-1]["level"] == "Appendix":
+        last = hierarchy.pop()
+        heading = f"Appendix {last['number']} {last['name']}"
 
     body = lines[heading_idx + 1:]
     # Trim site navigation that trails the regulation text.
@@ -169,14 +174,18 @@ def extract_section(url, raw_html):
     # Split off the authority note and history, which DIR prints after the text.
     # Only "Note: Authority/Reference cited" is the authority note; other notes
     # ("Note: The construction of ...") are part of the regulation text.
+    # DIR prints it either on one line or as a bare "NOTE" line above it.
     note, history = "", []
     text_lines = body
     for i, line in enumerate(body):
         m = re.match(r"^NOTE:\s*((?:Authority|Reference)\b.*)$", line, re.I)
-        if m:
-            note = m.group(1).strip()
+        nxt = body[i + 1] if i + 1 < len(body) else ""
+        split = (re.match(r"^NOTE:?$", line, re.I)
+                 and re.match(r"^(?:Authority|Reference)\b", nxt, re.I))
+        if m or split:
+            note = m.group(1).strip() if m else nxt
             text_lines = body[:i]
-            rest = body[i + 1:]
+            rest = body[i + (1 if m else 2):]
             if rest and re.match(r"^HISTORY\b", rest[0], re.I):
                 rest = rest[1:]
             history = rest

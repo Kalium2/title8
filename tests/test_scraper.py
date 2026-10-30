@@ -85,6 +85,26 @@ class RealLayoutTests(unittest.TestCase):
         self.assertEqual(rec["authority_note"], "Authority cited: Section 6501, Labor Code.")
         self.assertEqual(rec["history"], ["1. Filed."])
 
+    def test_note_on_its_own_line(self):
+        page = """<p>&sect;3469. Forklifts.</p><p>(a) Text.</p>
+        <p>Note: References to federal OSHA regulations correspond as follows.</p>
+        <p>NOTE</p><p>Authority cited: Section 142.3, Labor Code.</p>
+        <p>HISTORY</p><p>1. Filed.</p>"""
+        rec = t8.extract_section("https://www.dir.ca.gov/title8/3469.html", page)
+        self.assertTrue(rec["text"].endswith("correspond as follows."))
+        self.assertEqual(rec["authority_note"], "Authority cited: Section 142.3, Labor Code.")
+        self.assertEqual(rec["history"], ["1. Filed."])
+
+    def test_appendix_page_heading(self):
+        page = """<p>Article 107. Dusts, Fumes, Mists, Vapors and Gases</p>
+        <p>Appendix A to Section 5144: Fit Testing Procedures (Mandatory)</p>
+        <p>Part I. OSHA-Accepted Fit Test Protocols</p>"""
+        rec = t8.extract_section("https://www.dir.ca.gov/title8/5144a.html", page)
+        self.assertEqual(rec["heading"],
+                         "Appendix A to Section 5144: Fit Testing Procedures (Mandatory)")
+        self.assertEqual([h["level"] for h in rec["hierarchy"]], ["Article"])
+        self.assertEqual(rec["text"], "Part I. OSHA-Accepted Fit Test Protocols")
+
     def test_page_without_heading_or_text(self):
         page = """<html><head><title>California Code of Regulations, Title 8, Section 338.
         Special Procedures</title></head><body><a href="#c">Skip to Main Content</a>

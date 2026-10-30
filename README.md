@@ -84,6 +84,15 @@ everything fresh.
 
 ## Known limits
 
+- The DIR Title 8 index covers the Cal/OSHA chapters: Chapters 3.2 to 4,
+  sections 330 to 8618 (the Safety Orders, Standards Board and Appeals
+  Board rules). The first full run in October 2026 found 2,924 sections.
+  The Division of Workers' Compensation regulations (Chapter 4.5) are not
+  linked from that index and are not included.
+- Repealed or renumbered sections are kept, with their heading and history
+  and an empty text; `crawl_report.json` lists them under
+  `sections_without_text`.
+
 - The parser reads the page text, not a fixed page layout, so it should
   survive small changes to DIR's markup. A large redesign would need the
   patterns at the top of `title8_scraper.py` updating. The tests in
