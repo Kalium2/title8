@@ -1,7 +1,7 @@
 {
- "scraped_at": "2026-10-30T00:24:17+00:00",
+ "scraped_at": "2026-10-30T00:31:12+00:00",
  "source": "https://www.dir.ca.gov/title8/",
- "sections": 2925,
+ "sections": 2922,
  "sections_without_text": [
   "349",
   "353",
@@ -262,7 +262,6 @@
   "5181",
   "5182",
   "5183",
-  "5190c",
   "5225",
   "5226",
   "5227",
@@ -475,6 +474,6 @@
  ],
  "pages_fetched": 4906,
  "network_calls": 0,
- "seconds": 9.9,
+ "seconds": 6.9,
  "failures": []
 }
